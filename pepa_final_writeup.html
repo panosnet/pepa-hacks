@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pepa — The Definitive Hacking Writeup</title>
+<style>
+:root{--bg:#06060e;--s1:#0d0d1b;--s2:#111120;--bd:#18182e;--tx:#bbbbd8;--mu:#3a3a58;--ac:#7c6dfa;--tl:#00d4aa;--gd:#f7b731;--rd:#f25a5a;--gn:#5af77a;--cd:#06060d}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);line-height:1.75;font-size:16px}
+
+/* NAV */
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(6,6,14,.97);backdrop-filter:blur(16px);border-bottom:1px solid var(--bd);padding:0 28px;height:52px;display:flex;align-items:center;gap:0}
+.nav-brand{color:#fff;font-weight:800;font-size:15px;letter-spacing:-0.5px;margin-right:24px;flex-shrink:0}
+.nav-links{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+.nav-links::-webkit-scrollbar{display:none}
+.nav a{color:var(--mu);text-decoration:none;font-size:12.5px;padding:4px 10px;border-radius:6px;transition:all .15s;white-space:nowrap}
+.nav a:hover{color:var(--tl);background:rgba(0,212,170,.08)}
+
+/* HERO */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 24px 60px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:
+  radial-gradient(ellipse 60% 50% at 50% -10%,rgba(124,109,250,.22) 0%,transparent 65%),
+  radial-gradient(ellipse 40% 30% at 90% 90%,rgba(0,212,170,.12) 0%,transparent 55%),
+  radial-gradient(ellipse 30% 25% at 10% 80%,rgba(247,183,49,.08) 0%,transparent 55%)}
+.hero-robot{font-size:110px;margin-bottom:28px;animation:fl 4s ease-in-out infinite;filter:drop-shadow(0 0 60px rgba(124,109,250,.7))}
+@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
+.hero h1{font-size:clamp(32px,6vw,72px);font-weight:800;letter-spacing:-3px;color:#fff;margin-bottom:16px;line-height:1.05}
+.hero h1 em{font-style:normal;background:linear-gradient(135deg,#7c6dfa 0%,#00d4aa 40%,#f7b731 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero-sub{font-size:19px;color:var(--mu);max-width:660px;margin:0 auto 36px;line-height:1.6}
+.hero-tags{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.tag{padding:5px 14px;border-radius:100px;font-size:12px;font-weight:700;border:1px solid;letter-spacing:.3px}
+.tp{color:#a89af7;border-color:rgba(124,109,250,.4);background:rgba(124,109,250,.08)}
+.tt{color:#5af0d0;border-color:rgba(0,212,170,.4);background:rgba(0,212,170,.08)}
+.tg{color:#f7c95a;border-color:rgba(247,183,49,.4);background:rgba(247,183,49,.08)}
+.tr{color:#f7806a;border-color:rgba(242,90,90,.4);background:rgba(242,90,90,.08)}
+.tn{color:#9ae8ff;border-color:rgba(154,232,255,.4);background:rgba(154,232,255,.08)}
+
+/* LAYOUT */
+.page{padding-top:52px}
+.cont{max-width:960px;margin:0 auto;padding:0 28px 120px}
+
+/* STAT ROW */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:48px 0 60px}
+.stat{background:var(--s1);border:1px solid var(--bd);border-radius:14px;padding:22px 16px;text-align:center}
+.stat .big{font-size:42px;font-weight:800;color:#fff;line-height:1}
+.stat .lbl{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:1.5px;margin-top:7px}
+.stat .sub{font-size:12px;margin-top:4px}
+
+/* SECTION */
+.section{margin-bottom:80px;scroll-margin-top:68px}
+.section-label{font-size:10px;color:var(--mu);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.section-label::after{content:'';flex:1;height:1px;background:var(--bd)}
+.section h2{font-size:30px;font-weight:700;color:#fff;letter-spacing:-.8px;margin-bottom:20px}
+.section p{margin-bottom:16px;color:var(--tx)}
+
+/* TERMINAL */
+.term{background:var(--cd);border:1px solid var(--bd);border-radius:12px;overflow:hidden;margin:18px 0;font-family:'SF Mono','Fira Code',Consolas,monospace;font-size:13.5px}
+.tbar{background:#101020;padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bd)}
+.td{width:12px;height:12px;border-radius:50%}.tdr{background:#ff5f57}.tdy{background:#febc2e}.tdg{background:#28c840}
+.tttl{color:var(--mu);font-size:12px;margin-left:6px}
+.tbody{padding:18px 22px;overflow-x:auto;line-height:1.7}
+.tbody pre{white-space:pre}
+.p{color:#7c6dfa}.c{color:#5af77a}.o{color:var(--tx)}.cm{color:#383858;font-style:italic}
+.hl{color:#f7c95a}.hl2{color:#00d4aa}.hl3{color:#f25a5a}.hl4{color:#c792ea}
+
+/* CODE BLOCK */
+.code{background:var(--cd);border:1px solid var(--bd);border-radius:12px;overflow:hidden;margin:18px 0}
+.cbar{background:#101020;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd);font-size:12px;color:var(--mu);font-family:'SF Mono',monospace}
+.lang{background:rgba(124,109,250,.14);color:#a89af7;border:1px solid rgba(124,109,250,.3);padding:2px 10px;border-radius:100px;font-size:11px}
+.code pre{padding:18px 22px;overflow-x:auto;font-family:'SF Mono','Fira Code',monospace;font-size:13.5px;line-height:1.7;white-space:pre}
+.kw{color:#c792ea}.fn{color:#82aaff}.str{color:#c3e88d}.num{color:#f78c6c}.cmt{color:#383858;font-style:italic}.type{color:#ffcb6b}
+
+/* DIAGRAM */
+.diag{background:var(--cd);border:1px solid var(--bd);border-radius:12px;padding:22px;margin:18px 0;font-family:'SF Mono',monospace;font-size:13px;line-height:2;overflow-x:auto}
+
+/* PIPELINE */
+.pipe{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:18px 0;background:var(--cd);border:1px solid var(--bd);border-radius:12px;padding:18px 22px;font-family:'SF Mono',monospace;font-size:13.5px}
+.ps{padding:8px 16px;border-radius:8px;white-space:nowrap;font-weight:600}
+.ps-p{background:rgba(124,109,250,.12);border:1px solid rgba(124,109,250,.3);color:#a89af7}
+.ps-t{background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);color:#5af0d0}
+.ps-g{background:rgba(247,183,49,.1);border:1px solid rgba(247,183,49,.3);color:#f7c95a}
+.par{color:var(--mu);font-size:18px}
+
+/* INFO */
+.info{background:var(--s2);border:1px solid var(--bd);border-radius:12px;padding:16px 20px;margin:18px 0;border-left:3px solid var(--ac)}
+.info.tl{border-left-color:var(--tl)}.info.gd{border-left-color:var(--gd)}.info.rd{border-left-color:var(--rd)}.info.gn{border-left-color:var(--gn)}
+.info h4{font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;color:#a89af7;font-weight:700}
+.info.tl h4{color:#5af0d0}.info.gd h4{color:#f7c95a}.info.rd h4{color:#f7806a}.info.gn h4{color:#5af77a}
+.info p{font-size:14px}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+.tbl th{text-align:left;padding:9px 14px;background:var(--s2);color:var(--mu);font-size:10px;text-transform:uppercase;letter-spacing:1.2px;border-bottom:1px solid var(--bd)}
+.tbl td{padding:9px 14px;border-bottom:1px solid rgba(24,24,46,.6)}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+.ok{color:var(--gn)}.bad{color:var(--rd)}.warn{color:var(--gd)}
+
+/* EVOLUTION TIMELINE */
+.evol{display:flex;flex-direction:column;gap:0;margin:22px 0}
+.evol-item{display:flex;gap:16px;padding:16px 0;border-bottom:1px solid rgba(24,24,46,.5)}
+.evol-item:last-child{border-bottom:none}
+.evol-num{flex-shrink:0;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;margin-top:2px}
+.en-rd{background:rgba(242,90,90,.15);color:var(--rd);border:1px solid rgba(242,90,90,.3)}
+.en-gd{background:rgba(247,183,49,.15);color:var(--gd);border:1px solid rgba(247,183,49,.3)}
+.en-gn{background:rgba(90,247,122,.15);color:var(--gn);border:1px solid rgba(90,247,122,.3)}
+.evol-body h4{font-size:15px;font-weight:700;color:#fff;margin-bottom:4px}
+.evol-body p{font-size:13px;color:var(--mu);line-height:1.5}
+
+/* SPEED TABLE */
+.spd-row{display:grid;grid-template-columns:28px 80px 90px 100px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid rgba(24,24,46,.5);align-items:center;font-size:14px}
+.spd-row:last-child{border:none}
+.spd-bar{height:6px;border-radius:3px;background:rgba(255,255,255,.05)}
+.spd-fill{height:100%;border-radius:3px}
+
+/* LESSONS */
+.lgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin:20px 0}
+.lcard{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:16px}
+.lcard.ok{border-left:3px solid var(--gn)}.lcard.bad{border-left:3px solid var(--rd)}
+.lcard .ico{font-size:20px;margin-bottom:8px}
+.lcard h4{font-size:13px;font-weight:700;color:#fff;margin-bottom:6px}
+.lcard p{font-size:12px;color:var(--mu);line-height:1.5}
+
+/* UI MOCKUP */
+.mockup{background:#181828;border:1px solid #252540;border-radius:14px;overflow:hidden;max-width:360px;box-shadow:0 24px 64px rgba(0,0,0,.6)}
+.mbar{background:#0e0e20;padding:11px 16px;font-size:12px;color:#4a4a6a;border-bottom:1px solid #1e1e38;display:flex;align-items:center;gap:8px}
+.mbd{padding:10px;display:flex;flex-direction:column;gap:7px}
+.mc{background:#0b0b1c;border-radius:10px;padding:11px 14px;border:1px solid #1a1a34}
+.mc-act{border-color:rgba(0,212,170,.35);background:rgba(0,212,170,.04)}
+.mrow{display:flex;align-items:center;justify-content:space-between}
+.mlbl{font-size:13px;color:#d0d0ee;font-weight:600}.mval{font-size:12px;color:#5af0d0;font-weight:700}
+.mnow{font-size:11px;color:#5af0d0;margin-top:3px}
+.mslider{margin-top:9px;padding:2px 4px 6px}
+.mtrack{height:3px;background:#1a1a38;border-radius:2px;position:relative}
+.mfill-spd{width:60%;background:linear-gradient(90deg,#7c6dfa,#f7b731)}
+.mfill-vol{width:50%;background:linear-gradient(90deg,#7c6dfa,#00d4aa)}
+.mfill{position:absolute;left:0;top:0;height:100%;border-radius:2px}
+.mthumb{position:absolute;top:-5px;transform:translateX(-50%);width:13px;height:13px;background:#fff;border-radius:50%}
+.mmarks{display:flex;justify-content:space-between;font-size:9px;color:#303050;margin-top:5px}
+.mvlbls{display:flex;justify-content:space-between;font-size:9px;color:#303050;margin-bottom:3px}
+
+hr.div{border:none;height:1px;background:linear-gradient(90deg,transparent,var(--bd),transparent);margin:0}
+
+code{background:rgba(124,109,250,.12);border:1px solid rgba(124,109,250,.2);padding:1px 7px;border-radius:5px;font-family:'SF Mono',monospace;font-size:13px;color:#c8b8ff}
+
+.fade{opacity:0;transform:translateY(20px);transition:opacity .5s ease,transform .5s ease}
+.fade.vis{opacity:1;transform:none}
+
+footer{border-top:1px solid var(--bd);padding:48px 24px;text-align:center;color:var(--mu);font-size:13px}
+footer p+p{margin-top:6px}
+
+@media(max-width:640px){.stats{grid-template-columns:1fr 1fr}.pipe{flex-direction:column}.hero h1{letter-spacing:-1.5px}}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <span class="nav-brand">🤖 Pepa</span>
+  <div class="nav-links">
+    <a href="#access">SSH</a>
+    <a href="#reverse">Reversing</a>
+    <a href="#ldpreload">LD_PRELOAD</a>
+    <a href="#ui">UI</a>
+    <a href="#radio">Radio</a>
+    <a href="#volume">Volume</a>
+    <a href="#speed-ui">Speed UI</a>
+    <a href="#lessons">Lessons</a>
+    <a href="#files">Files</a>
+  </div>
+</nav>
+
+<div class="page">
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-robot">🤖</div>
+  <h1>Pepa<br><em>The Definitive Hacking Writeup</em></h1>
+  <p class="hero-sub">A Roborock S5 running Valetudo — fully reverse engineered, speed-hacked, internet-radio-equipped, and controlled via a native web UI. Everything local, no cloud, no app.</p>
+  <div class="hero-tags">
+    <span class="tag tp">ARM Thumb2 Disassembly</span>
+    <span class="tag tt">LD_PRELOAD Injection</span>
+    <span class="tag tg">WallFollower Speed Override</span>
+    <span class="tag tr">ALSA Audio Pipeline</span>
+    <span class="tag tn">13 Radio Stations</span>
+    <span class="tag tp">Valetudo UI Modding</span>
+    <span class="tag tt">pkg Binary Bundling</span>
+    <span class="tag tg">Cross-Compilation</span>
+  </div>
+</div>
+
+<div class="cont">
+
+<!-- STATS -->
+<div class="stats fade">
+  <div class="stat"><div class="big">+167%</div><div class="lbl">Max speed gain</div><div class="sub" style="color:var(--rd)">0.20 → 0.80 m/s</div></div>
+  <div class="stat"><div class="big">6</div><div class="lbl">Speed presets</div><div class="sub" style="color:var(--ac)">Slow → Max</div></div>
+  <div class="stat"><div class="big">13</div><div class="lbl">Radio stations</div><div class="sub" style="color:var(--tl)">All mpg123 verified</div></div>
+  <div class="stat"><div class="big">4</div><div class="lbl">Override versions</div><div class="sub" style="color:var(--gd)">until SLAM worked</div></div>
+  <div class="stat"><div class="big">0</div><div class="lbl">Cloud dependency</div><div class="sub" style="color:var(--tl)">100% local</div></div>
+</div>
+
+<hr class="div"><br><br>
+
+<!-- CH1: SSH -->
+<div class="section fade" id="access">
+  <div class="section-label">Chapter 1</div>
+  <h2>SSH Access</h2>
+  <p><strong>Dustfab</strong> builds Valetudo firmware with a unique per-build ed25519 SSH key. The matching private key gives full root access wirelessly, no UART, no hardware hacking needed.</p>
+  <div class="term">
+    <div class="tbar"><div class="td tdr"></div><div class="td tdy"></div><div class="td tdg"></div><span class="tttl">Terminal</span></div>
+    <div class="tbody"><pre><span class="p">$</span> <span class="c">ssh -i ~/your-dustfab-key.key root@YOUR-ROBOT-IP</span>
+
+<span class="p">root@rockrobo:~#</span> <span class="c">uname -a</span>
+<span class="hl">Linux rockrobo 3.4.39 armv7l GNU/Linux</span>  <span class="cm">← kernel 2020, no gcc, no python</span>
+<span class="p">root@rockrobo:~#</span> <span class="c">cat /proc/version | grep -o 'glibc.*'</span>
+<span class="cm">glibc 2.19 (2014) — cross-compile binaries must target this or older</span></pre></div>
+  </div>
+  <div class="info tl"><h4>Architecture</h4><p><code>WatchDoge</code> (supervisor) → <code>rr_loader</code> (navigation + librrnavdrv.so) → <code>RoboController</code> + <code>AppProxy</code>. Kill any process — WatchDoge restarts in ~2s. The key insight: rr_loader loads shared libraries from <code>/etc/ld.so.preload</code> on every restart.</p></div>
+</div>
+
+<!-- CH2: REVERSING -->
+<div class="section fade" id="reverse">
+  <div class="section-label">Chapter 2</div>
+  <h2>Reverse Engineering the Speed Limit</h2>
+  <p>No config file controls wheel speed. The limit is baked into <code>/opt/rockrobo/cleaner/lib/librrnavdrv.so</code> — a 3.2MB stripped ARM shared library. Downloaded to Mac, parsed the ELF dynamic symbol table in Python to locate 188 speed-related exports.</p>
+  <p>Disassembled the 12-byte getters in ARM Thumb2 by hand:</p>
+  <div class="code">
+    <div class="cbar"><span>NavConfig::Robot::Get_MAX_SPEED() @ 0x2aadc9</span><span class="lang">ARM Thumb2</span></div>
+    <pre><span class="type">4801</span>  <span class="kw">ldr</span>   r0, [pc, #4]    <span class="cmt">; load literal → r0 = 0x308e08</span>
+<span class="type">4478</span>  <span class="kw">add</span>   r0, pc           <span class="cmt">; add PC-relative base</span>
+<span class="type">3020</span>  <span class="kw">adds</span>  r0, #0x20       <span class="cmt">; r0 = 0x308e28  ← pointer to float constant in .text</span>
+<span class="type">4770</span>  <span class="kw">bx</span>    lr              <span class="cmt">; return const float& (C++ reference)</span></pre>
+  </div>
+  <p>Hexdump of the constants at those offsets:</p>
+  <div class="diag">
+<span style="color:var(--mu)">offset      bytes              value</span>
+<span style="color:#a89af7">0x308e28:</span>  <span style="color:var(--rd)">9a 99 99 3e</span>   <span style="color:var(--tx)">= float <b>0.30</b>  ← MAX_SPEED — patched</span>
+<span style="color:#a89af7">0x308e34:</span>  <span style="color:var(--rd)">33 33 b3 3e</span>   <span style="color:var(--tx)">= float <b>0.35</b>  ← LIMIT_MAX_SPEED — patched</span></div>
+
+  <p><strong>Disk patch</strong> — <code>/opt</code> is writable, 8 bytes changed with <code>dd conv=notrunc</code>:</p>
+  <div class="term">
+    <div class="tbar"><div class="td tdr"></div><div class="td tdy"></div><div class="td tdg"></div></div>
+    <div class="tbody"><pre><span class="cm"># float 0.5 = 0x3F000000 → LE: 00 00 00 3f</span>
+<span class="p">root@rockrobo:~#</span> <span class="c">cp $LIB /mnt/data/librrnavdrv.so.orig</span>  <span class="cm"># backup first</span>
+<span class="p">root@rockrobo:~#</span> <span class="c">printf '\x00\x00\x00\x3f' | dd of=$LIB bs=1 seek=$((0x308e28)) conv=notrunc</span>
+<span class="p">root@rockrobo:~#</span> <span class="c">printf '\x00\x00\x00\x3f' | dd of=$LIB bs=1 seek=$((0x308e34)) conv=notrunc</span>
+<span class="p">root@rockrobo:~#</span> <span class="c">kill -9 $(pgrep rr_loader)</span>  <span class="cm"># WatchDoge restarts with new values</span></pre></div>
+  </div>
+</div>
+
+<!-- CH3: LD_PRELOAD -->
+<div class="section fade" id="ldpreload">
+  <div class="section-label">Chapter 3</div>
+  <h2>LD_PRELOAD Speed Override — 4 Versions to Get Right</h2>
+  <p>The disk patch changes the baseline speed but requires a restart to apply. For live changes, we inject a shared library via <code>/etc/ld.so.preload</code>. Every process (including rr_loader after WatchDoge restarts it) loads our library first, letting our symbols shadow librrnavdrv.so's.</p>
+
+  <div class="evol">
+    <div class="evol-item">
+      <div class="evol-num en-rd">v1</div>
+      <div class="evol-body">
+        <h4>Config getters only — ❌ Didn't intercept</h4>
+        <p>Overrode <code>NavConfig::Robot::Get_MAX_SPEED()</code> etc. Library loaded but <strong>symbols weren't in the dynamic symbol table</strong> (.dynsym was empty). BusyBox <code>nm -D</code> returns nothing; confirmed via <code>objdump -T</code> on your build PC. Built with Fedora's <code>arm-linux-gnu-gcc</code> using stub libraries — stubs didn't properly export symbols.</p>
+      </div>
+    </div>
+    <div class="evol-item">
+      <div class="evol-num en-rd">v2</div>
+      <div class="evol-body">
+        <h4>Config + GoStraight getters — ❌ Still no interception</h4>
+        <p>Added <code>NavConfig::GoStraight::Get_MAX_SPEED()</code> and all config getters. Rebuilt with proper <code>-fPIC -shared</code> flags; <code>objdump -T</code> on your build PC showed GLOBAL symbols in .dynsym. But speed test showed no change — these functions are likely not called via PLT (may use direct relative calls within the library), so LD_PRELOAD can't intercept them.</p>
+      </div>
+    </div>
+    <div class="evol-item">
+      <div class="evol-num en-gd">v3</div>
+      <div class="evol-body">
+        <h4>SetSpeed motion interceptor — ✅ Speed works, ❌ SLAM broken</h4>
+        <p>Intercepted <code>NavRRLoaderPlugin::SetSpeed(double lin, double ang)</code> via <code>dlsym(RTLD_NEXT)</code> and multiplied <code>lin × scale</code>. Robot visibly moved faster. But the nav <strong>planned sweeps at 0.3 m/s</strong> while the robot <strong>executed at 0.45 m/s</strong> — SLAM saw unexpected extra movement, map drifted and robot got confused.</p>
+      </div>
+    </div>
+    <div class="evol-item">
+      <div class="evol-num en-gn">v4</div>
+      <div class="evol-body">
+        <h4>WallFollower planning speed override — ✅ Works correctly</h4>
+        <p>Overrode <code>NavConfig::WallFollower::Get_SPEED()</code> — the function that controls how fast the nav <strong>plans</strong> the zigzag cleaning sweeps. Nav plans at the new speed → calls SetSpeed at the new speed → robot executes at that speed. Plan == execution → SLAM stays accurate. <code>SetSpeed</code> passes through unchanged.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="code">
+    <div class="cbar"><span>/mnt/data/speed_override.so — v4 final implementation</span><span class="lang">C + ARM hard-float</span></div>
+    <pre><span class="cmt">/* Reads desired speed from /mnt/data/speed.conf on every call */</span>
+<span class="kw">static</span> <span class="type">float</span> <span class="fn">get_speed_f</span>(<span class="type">void</span>) {
+    <span class="type">FILE</span>* f = <span class="fn">fopen</span>(<span class="str">"/mnt/data/speed.conf"</span>, <span class="str">"r"</span>);
+    <span class="kw">if</span> (!f) <span class="kw">return</span> <span class="num">0.45f</span>;
+    <span class="type">char</span> buf[<span class="num">32</span>] = {<span class="num">0</span>}; <span class="fn">fgets</span>(buf, <span class="num">32</span>, f); <span class="fn">fclose</span>(f);
+    <span class="kw">if</span> (!<span class="fn">strncmp</span>(buf,<span class="str">"slow"</span>,  <span class="num">4</span>)) <span class="kw">return</span> <span class="num">0.20f</span>;
+    <span class="kw">if</span> (!<span class="fn">strncmp</span>(buf,<span class="str">"normal"</span>,<span class="num">6</span>)) <span class="kw">return</span> <span class="num">0.30f</span>;
+    <span class="kw">if</span> (!<span class="fn">strncmp</span>(buf,<span class="str">"fast"</span>,  <span class="num">4</span>)) <span class="kw">return</span> <span class="num">0.45f</span>;
+    <span class="kw">if</span> (!<span class="fn">strncmp</span>(buf,<span class="str">"turbo"</span>, <span class="num">5</span>)) <span class="kw">return</span> <span class="num">0.55f</span>;
+    <span class="kw">if</span> (!<span class="fn">strncmp</span>(buf,<span class="str">"ultra"</span>, <span class="num">5</span>)) <span class="kw">return</span> <span class="num">0.65f</span>;
+    <span class="kw">if</span> (!<span class="fn">strncmp</span>(buf,<span class="str">"max"</span>,   <span class="num">3</span>)) <span class="kw">return</span> <span class="num">0.80f</span>;
+    <span class="kw">return</span> <span class="num">0.45f</span>;
+}
+
+<span class="cmt">/* === Override planning speeds (called via PLT — LD_PRELOAD works here) === */</span>
+<span class="type">float</span>* <span class="fn">_ZN9NavConfig12WallFollower9Get_SPEEDEv</span>(<span class="type">void</span>* t)  { g=<span class="fn">get_speed_f</span>(); <span class="kw">return</span> &g; }
+<span class="type">float</span>* <span class="fn">_ZN9NavConfig17WallFollowerTANOS9Get_SPEEDEv</span>(<span class="type">void</span>* t) { g=<span class="fn">get_speed_f</span>(); <span class="kw">return</span> &g; }
+<span class="type">float</span>* <span class="fn">_ZN9NavConfig10GoStraight13Get_MAX_SPEEDEv</span>(<span class="type">void</span>* t)  { g=<span class="fn">get_speed_f</span>(); <span class="kw">return</span> &g; }
+<span class="type">float</span>* <span class="fn">_ZN9NavConfig5Robot13Get_MAX_SPEEDEv</span>(<span class="type">void</span>* t)         { g=<span class="fn">get_speed_f</span>(); <span class="kw">return</span> &g; }
+<span class="cmt">/* ... (+ 5 more planning speed getters) */</span>
+
+<span class="cmt">/* === SetSpeed passes through unchanged — nav already planned correctly === */</span>
+<span class="kw">void</span> <span class="fn">_ZN17NavRRLoaderPlugin8SetSpeedEdd</span>(<span class="type">void</span>* t, <span class="type">double</span> lin, <span class="type">double</span> ang) {
+    <span class="kw">static</span> <span class="type">void</span> (*orig)(<span class="type">void</span>*, <span class="type">double</span>, <span class="type">double</span>) = <span class="num">0</span>;
+    <span class="kw">if</span> (!orig) orig = (<span class="type">void</span>(*)(<span class="type">void</span>*,<span class="type">double</span>,<span class="type">double</span>))<span class="fn">dlsym</span>(RTLD_NEXT,
+        <span class="str">"_ZN17NavRRLoaderPlugin8SetSpeedEdd"</span>);
+    <span class="kw">if</span> (orig) orig(t, lin, ang); <span class="cmt">/* unchanged — SLAM stays accurate */</span>
+}</pre>
+  </div>
+
+  <p><strong>Why v4 fixes SLAM:</strong> Nav plans sweep rows at the new speed (e.g. 0.55 m/s turbo). Nav then calls <code>SetSpeed(0.55)</code>. Robot executes at 0.55. SLAM sees planned = actual = consistent. No drift.</p>
+
+  <p><strong>Compiled</strong> on your build PC (Fedora 41) using Ubuntu 16.04 in podman — the only way to get glibc-2.19-compatible ARM binaries. Deployed via HTTP server (the only reliable transfer method).</p>
+
+  <div class="info rd"><h4>⚠ Critical: symbol visibility</h4><p>The .so <strong>must</strong> have functions in the dynamic symbol table (.dynsym). Compile with <code>-fPIC -shared</code> only. Verify with <code>objdump -T speed_override.so | grep GLOBAL</code> on a machine with proper tools — BusyBox <code>nm -D</code> returns nothing even for valid .so files.</p></div>
+
+  <div class="info gd"><h4>Live speed changes</h4><p>Changing speed writes <code>speed.conf</code> and sends <code>app_pause</code> → 1.5s delay → <code>app_start</code> via the miio named pipe. GoStraight re-reads the planning speed on resume via our overridden getters. Brief cleaning pause, then continues at new speed.</p></div>
+</div>
+
+<!-- CH4: UI -->
+<div class="section fade" id="ui">
+  <div class="section-label">Chapter 4</div>
+  <h2>Valetudo UI — Speed, Radio &amp; Volume</h2>
+  <p>Rebuilt Valetudo 2025.01.0 from source. Three new controls added to the left panel below Fan Speed — all matching the existing MUI Paper card style:</p>
+
+  <div class="mockup fade">
+    <div class="mbar"><span style="font-size:16px">🤖</span><span>Pepa — 192.168.x.x</span></div>
+    <div class="mbd">
+      <div class="mc"><div class="mrow"><span>🌀 Fan</span><span class="mval">Max ▾</span></div></div>
+      <div class="mc mc-act">
+        <div class="mrow"><span>⚡ Speed</span><span style="color:#f7c95a;font-size:12px;font-weight:700">Turbo ▾</span></div>
+        <div class="mslider">
+          <div class="mtrack">
+            <div class="mfill mfill-spd" style="width:57%"></div>
+            <div class="mthumb" style="left:57%"></div>
+          </div>
+          <div class="mmarks"><span>Slow</span><span>Normal</span><span>Fast</span><span style="color:#f7c95a">Turbo</span><span>Ultra</span><span>Max</span></div>
+        </div>
+      </div>
+      <div class="mc mc-act">
+        <div class="mrow"><span>📻 Radio</span><span class="mval">Evropa 2 ▶</span></div>
+        <div class="mnow">▶ Evropa 2 — live</div>
+        <div class="mslider">
+          <div class="mvlbls"><span>🔉</span><span style="color:var(--mu)">60%</span><span>🔊</span></div>
+          <div class="mtrack">
+            <div class="mfill mfill-vol" style="width:60%"></div>
+            <div class="mthumb" style="left:60%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info"><h4>Build process (learned the hard way)</h4><p>1. Build frontend: <code>podman run --user root -w /src/frontend node:20-alpine sh -c 'npm run build'</code><br>2. Build backend: <code>podman run --user root -w /src/backend node:20-alpine sh -c 'npm run build_armv7'</code><br>3. Always <code>rm build/armv7/valetudo*</code> first — pkg caches old output.<br>4. Deploy via gzip + HTTP server on your build PC + wget on robot. <strong>Never</strong> pipe binary through double SSH.</p></div>
+</div>
+
+<!-- CH5: RADIO -->
+<div class="section fade" id="radio">
+  <div class="section-label">Chapter 5</div>
+  <h2>Internet Radio — Building the Audio Pipeline</h2>
+  <p>The robot has ALSA (<code>audiocodec</code>, <code>plughw:0,0</code>). No audio tools installed. Three custom binaries built and deployed:</p>
+
+  <div class="pipe">
+    <div class="ps ps-p"><strong>HTTPS stream</strong></div><div class="par">→</div>
+    <div class="ps ps-p"><strong>wget</strong><br><small style="opacity:.7">BusyBox, handles ICY + HTTPS</small></div><div class="par">|</div>
+    <div class="ps ps-t"><strong>/mnt/data/mpg123</strong><br><small>wrapper reads radio_volume.conf</small></div><div class="par">→</div>
+    <div class="ps ps-t"><strong>mpg123_bin -s -</strong><br><small>decode MP3 → raw PCM stdout</small></div><div class="par">|</div>
+    <div class="ps ps-g"><strong>alsa_play</strong><br><small>PCM stdin → ALSA speaker</small></div>
+  </div>
+
+  <table class="tbl">
+    <tr><th>Binary</th><th>Size</th><th>Compiler</th><th>Notes</th></tr>
+    <tr><td><code>mpg123_bin</code></td><td>1.8MB</td><td>Ubuntu 16.04 arm-linux-gnueabihf-gcc</td><td>v1.26.4, statically linked. 16.04 required — 22.04 generates GLIBC_2.28+ symbols incompatible with robot's glibc 2.19</td></tr>
+    <tr><td><code>alsa_play</code></td><td>5.7KB</td><td>Fedora arm-linux-gnu-gcc + stubs</td><td>Custom <code>_start</code> entry, inline ARM syscalls with correct register constraints (<code>__asm__ "r0"</code>/<code>"r7"</code>)</td></tr>
+    <tr><td><code>mpg123</code></td><td>280B</td><td>Shell script</td><td>Volume wrapper: reads <code>radio_volume.conf</code> (0–100), converts to <code>--scale N</code> (N = vol×328)</td></tr>
+  </table>
+
+  <h3 style="color:#fff;font-size:17px;margin:24px 0 14px;">13 Stations — All Verified via mpg123 Decode Test</h3>
+  <p style="font-size:13px;color:var(--mu);margin-bottom:14px">Test method: <code>wget -O - URL | mpg123_bin -s - | wc -c</code> — result &gt;1000 bytes = stream decodes. Raw hex test (<code>ff fb</code>) gives false negatives on ICY streams where wget strips headers.</p>
+  <table class="tbl">
+    <tr><th>Station</th><th>Country</th><th>URL</th><th></th></tr>
+    <tr><td>Evropa 2</td><td>🇨🇿</td><td><code>playerservices.streamtheworld.com/…/EVROPA2.mp3</code></td><td class="ok">✅</td></tr>
+    <tr><td>Frekvence 1</td><td>🇨🇿</td><td><code>ice.actve.net/fm-frekvence1-128</code></td><td class="ok">✅</td></tr>
+    <tr><td>Radio Beat</td><td>🇨🇿</td><td><code>icecast2.play.cz/radiobeat128.mp3</code></td><td class="ok">✅</td></tr>
+    <tr><td>ČRo Radiožurnál</td><td>🇨🇿</td><td><code>icecast9.play.cz/cro1-128.mp3</code></td><td class="ok">✅</td></tr>
+    <tr><td>Country Radio</td><td>🇨🇿</td><td><code>icecast4.play.cz/country128.mp3</code></td><td class="ok">✅</td></tr>
+    <tr><td>Rockzone</td><td>🇨🇿</td><td><code>icecast5.play.cz/rockzone.mp3</code></td><td class="ok">✅</td></tr>
+    <tr><td>Kiss Delta</td><td>🇨🇿</td><td><code>icecast1.play.cz:8000/kissdelta192.mp3</code></td><td class="ok">✅</td></tr>
+    <tr><td>OffRadio</td><td>🇬🇷</td><td><code>s3.yesstreaming.net:7062/stream</code></td><td class="ok">✅</td></tr>
+    <tr><td>Pepper 96.6</td><td>🇬🇷</td><td><code>pepper966.live24.gr/pepper9660</code></td><td class="ok">✅</td></tr>
+    <tr><td>Rythmos 94.9</td><td>🇬🇷</td><td><code>stream.radiojar.com/aw1w2xfx1vduv</code></td><td class="ok">✅</td></tr>
+    <tr><td>Groove Salad</td><td>🇺🇸</td><td><code>ice1.somafm.com/groovesalad-128-mp3</code></td><td class="ok">✅</td></tr>
+    <tr><td>Secret Agent</td><td>🇺🇸</td><td><code>ice1.somafm.com/secretagent-128-mp3</code></td><td class="ok">✅</td></tr>
+    <tr><td>Drone Zone</td><td>🇺🇸</td><td><code>ice1.somafm.com/dronezone-128-mp3</code></td><td class="ok">✅</td></tr>
+    <tr><td>Menta 88 / Sfera 102.2</td><td>🇬🇷</td><td>various</td><td class="bad">❌ AAC-only</td></tr>
+  </table>
+  <div class="info rd"><h4>⚠ Critical: process group killing</h4><p>Kill the radio shell pipeline by <strong>process group</strong>: <code>process.kill(-pid, "SIGTERM")</code>. Killing only the shell PID leaves <code>mpg123</code> and <code>alsa_play</code> running as orphans, holding the ALSA device. Next station start fails with "device busy".</p></div>
+</div>
+
+<!-- CH6: VOLUME -->
+<div class="section fade" id="volume">
+  <div class="section-label">Chapter 6</div>
+  <h2>Volume Control</h2>
+  <p>ALSA <code>amixer scontrols</code> returns empty — no mixer controls. Valetudo's <code>SpeakerVolumeControlCapability</code> PUT returns 400 (firmware doesn't support miio volume writing). Solution: <code>mpg123</code>'s <code>--scale</code> flag scales PCM before output. The wrapper script converts 0–100% → scale 0–32768:</p>
+  <div class="code">
+    <div class="cbar"><span>/mnt/data/mpg123 — volume wrapper</span><span class="lang">Shell</span></div>
+    <pre>VOL=$(cat /mnt/data/radio_volume.conf 2>/dev/null | tr -cd '0-9' | head -c 3)
+[ -z "$VOL" ] && VOL=50
+SCALE=$(( VOL * 328 ))          <span class="cmt"># 100% → 32800 ≈ 32768 max</span>
+exec /mnt/data/mpg123_bin --scale $SCALE "$@"</pre>
+  </div>
+  <p>The Radio card's volume slider calls <code>PUT /api/v2/robot/radio/volume</code> which writes <code>radio_volume.conf</code> and restarts the current stream (~600ms gap). Volume persists across reboots.</p>
+</div>
+
+<!-- CH7: SPEED UI -->
+<div class="section fade" id="speed-ui">
+  <div class="section-label">Chapter 7</div>
+  <h2>Speed Presets Reference</h2>
+  <p>With v4 LD_PRELOAD active: nav plans, executes, and SLAM measures all at the same speed. Map accuracy is preserved.</p>
+
+  <div style="background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:20px;margin:18px 0">
+    <div class="spd-row" style="font-size:11px;color:var(--mu);font-weight:700;text-transform:uppercase;letter-spacing:1px">
+      <span></span><span>Preset</span><span>Speed</span><span>vs Factory</span><span>LIDAR coverage</span>
+    </div>
+    <div class="spd-row"><span>🐢</span><span>Slow</span><span style="color:#5a5a7a">0.20 m/s</span><span style="color:var(--mu)">−33%</span><div class="spd-bar"><div class="spd-fill" style="width:20%;background:#2a2a48"></div></div></div>
+    <div class="spd-row"><span>🚶</span><span>Normal</span><span style="color:#888">0.30 m/s</span><span style="color:var(--mu)">=factory</span><div class="spd-bar"><div class="spd-fill" style="width:30%;background:#3a3a60"></div></div></div>
+    <div class="spd-row"><span>🏃</span><span>Fast</span><span style="color:var(--tl)">0.45 m/s</span><span style="color:var(--tl)">+50%</span><div class="spd-bar"><div class="spd-fill" style="width:45%;background:linear-gradient(90deg,#7c6dfa,#00d4aa)"></div></div></div>
+    <div class="spd-row"><span>🚀</span><span>Turbo</span><span style="color:var(--gd)">0.55 m/s</span><span style="color:var(--gd)">+83%</span><div class="spd-bar"><div class="spd-fill" style="width:55%;background:linear-gradient(90deg,#7c6dfa,#f7b731)"></div></div></div>
+    <div class="spd-row"><span>⚡</span><span>Ultra</span><span style="color:#f7a050">0.65 m/s</span><span style="color:#f7a050">+117%</span><div class="spd-bar"><div class="spd-fill" style="width:65%;background:linear-gradient(90deg,#f7b731,#f25a5a)"></div></div></div>
+    <div class="spd-row"><span>💀</span><span>Max</span><span style="color:var(--rd)">0.80 m/s</span><span style="color:var(--rd)">+167%</span><div class="spd-bar"><div class="spd-fill" style="width:80%;background:var(--rd)"></div></div></div>
+  </div>
+  <p style="font-size:13px;color:var(--mu)">At 5Hz LIDAR: Fast = 9cm/scan, Ultra = 13cm/scan, Max = 16cm/scan. All within acceptable range for reliable scan matching. The nav plans sweeps at the set speed — no SLAM drift.</p>
+</div>
+
+<hr class="div"><br>
+
+<!-- LESSONS -->
+<div class="section fade" id="lessons">
+  <div class="section-label">Lessons Learned</div>
+  <h2>What Burned Us — So It Doesn't Burn You</h2>
+  <div class="lgrid">
+    <div class="lcard bad"><div class="ico">💀</div><h4>SSH pipe binary transfer = corruption</h4><p>Piping <code>cat binary</code> through two SSH connections silently corrupts files. Always: HTTP server on your build PC (port 9999) + <code>wget</code> on robot to <code>/mnt/data/</code>. Verify with MD5.</p></div>
+    <div class="lcard bad"><div class="ico">🪣</div><h4>/tmp is only 30MB</h4><p>Robot's /tmp is a 30MB tmpfs. Large file downloads fail silently with wget exit 3. Always download to <code>/mnt/data/</code> (1.2GB free).</p></div>
+    <div class="lcard bad"><div class="ico">🐍</div><h4>Python heredoc \n breaks JS</h4><p><code>"\n"</code> in a Python <code>'''</code> string becomes a literal newline in the JS, creating an unclosed string literal. Binary compiles, crashes at startup. Use string concatenation.</p></div>
+    <div class="lcard bad"><div class="ico">📦</div><h4>pkg build cache = stale binary</h4><p>Always <code>rm build/armv7/valetudo*</code> before rebuilding. Build frontend and backend as separate steps with explicit <code>--user root</code>.</p></div>
+    <div class="lcard bad"><div class="ico">💥</div><h4>Starting Valetudo from SSH = EPIPE crash</h4><p>Valetudo's IPC pipe to rr_loader breaks when SSH session closes. Only system reboot reliably starts everything in the right sequence.</p></div>
+    <div class="lcard bad"><div class="ico">👻</div><h4>Kill shell PID ≠ kill pipeline children</h4><p>Killing <code>sh -c "mpg123 | alsa_play"</code> by PID leaves both child processes running. Kill by process group: <code>process.kill(-pid, "SIGTERM")</code>.</p></div>
+    <div class="lcard bad"><div class="ico">👁</div><h4>LD_PRELOAD .so needs exported .dynsym</h4><p>Library loads but intercepts nothing if symbols aren't GLOBAL in .dynsym. BusyBox <code>nm -D</code> always returns empty — verify with <code>objdump -T</code> on your build PC.</p></div>
+    <div class="lcard bad"><div class="ico">🗺</div><h4>Scaling SetSpeed breaks SLAM</h4><p>Multiplying the velocity command causes nav-planned position ≠ actual position. Override the <strong>planning</strong> speed functions instead so nav plans and executes consistently.</p></div>
+    <div class="lcard bad"><div class="ico">📡</div><h4>Greek radio is geo-blocked or AAC-only</h4><p>Many Greek streams timeout from non-Greek IPs, or use AAC that mpg123 1.26.4 can't decode. Test with: <code>wget -O - URL | mpg123_bin -s - | wc -c</code> — result &gt;1000 = works.</p></div>
+    <div class="lcard ok"><div class="ico">✅</div><h4>Ubuntu 16.04 for glibc 2.19 compat</h4><p>Robot has glibc 2.19. Ubuntu 22.04 gcc generates GLIBC_2.28+ symbols. Ubuntu 16.04 (glibc 2.23) stays compatible. Always verify with <code>objdump -p binary | grep GLIBC</code>.</p></div>
+    <div class="lcard ok"><div class="ico">✅</div><h4>HTTP server is the only reliable transfer</h4><p>gzip on your build PC + HTTP server on port 9999 + wget from robot. Always verify size and MD5 after transfer. Never rely on SSH pipe for binaries.</p></div>
+    <div class="lcard ok"><div class="ico">✅</div><h4>Radio Browser API for verified stream URLs</h4><p><code>de1.api.radio-browser.info/json/stations/search?name=X&amp;countrycode=CZ</code>. But always test FROM THE ROBOT — geo-blocking exists. The decode test is the definitive check.</p></div>
+  </div>
+</div>
+
+<!-- FILES -->
+<div class="section fade" id="files">
+  <div class="section-label">Reference</div>
+  <h2>Files &amp; Locations</h2>
+  <table class="tbl">
+    <tr><th>File</th><th>Path</th><th>Purpose</th></tr>
+    <tr><td><code>valetudo</code></td><td><code>/usr/local/bin/</code></td><td>Patched Valetudo 2025.01.0 (Speed + Radio + Volume UI)</td></tr>
+    <tr><td><code>valetudo-dustfab.bak</code></td><td><code>/mnt/data/</code></td><td>Original Dustfab backup — restore to revert everything</td></tr>
+    <tr><td><code>speed_override.so</code></td><td><code>/mnt/data/</code></td><td>LD_PRELOAD v4 — overrides WallFollower + GoStraight planning speeds</td></tr>
+    <tr><td><code>speed.conf</code></td><td><code>/mnt/data/</code></td><td>Current speed preset: slow/normal/fast/turbo/ultra/max</td></tr>
+    <tr><td><code>mpg123_bin</code></td><td><code>/mnt/data/</code></td><td>mpg123 v1.26.4 static ARM binary</td></tr>
+    <tr><td><code>mpg123</code></td><td><code>/mnt/data/</code></td><td>Volume wrapper script</td></tr>
+    <tr><td><code>alsa_play</code></td><td><code>/mnt/data/</code></td><td>PCM stdin → ALSA binary (custom _start, ARM syscalls)</td></tr>
+    <tr><td><code>radio_stations.json</code></td><td><code>/mnt/data/</code></td><td>Custom station overrides (user-added via UI ✕ to delete)</td></tr>
+    <tr><td><code>radio_volume.conf</code></td><td><code>/mnt/data/</code></td><td>Radio volume 0–100</td></tr>
+    <tr><td><code>librrnavdrv.so.orig</code></td><td><code>/mnt/data/</code></td><td>Original nav library — backup before disk patch</td></tr>
+    <tr><td><code>/etc/ld.so.preload</code></td><td>system</td><td>Contains: <code>/mnt/data/speed_override.so</code></td></tr>
+    <tr><td><code>valetudo-patched/</code></td><td><code>/tmp/</code> on your build PC</td><td>Valetudo 2025.01.0 source with all patches</td></tr>
+    <tr><td><code>PEPA_SESSION_RULES.md</code></td><td><code>~/pepa-hacks/</code></td><td>Full rules and gotchas for future sessions</td></tr>
+  </table>
+
+  <h2 style="font-size:20px;font-weight:700;color:#fff;margin:32px 0 16px;">Revert to Factory</h2>
+  <div class="term">
+    <div class="tbar"><div class="td tdr"></div><div class="td tdy"></div><div class="td tdg"></div></div>
+    <div class="tbody"><pre><span class="cm"># 1. Restore original navigation library (factory 0.30 m/s)</span>
+<span class="p">root@rockrobo:~#</span> <span class="c">cp /mnt/data/librrnavdrv.so.orig /opt/rockrobo/cleaner/lib/librrnavdrv.so</span>
+
+<span class="cm"># 2. Remove LD_PRELOAD speed hook</span>
+<span class="p">root@rockrobo:~#</span> <span class="c">rm /etc/ld.so.preload</span>
+
+<span class="cm"># 3. Restore original Valetudo (Dustfab 2026.10.0)</span>
+<span class="p">root@rockrobo:~#</span> <span class="c">cp /mnt/data/valetudo-dustfab.bak /usr/local/bin/valetudo && reboot</span></pre></div>
+  </div>
+</div>
+
+</div><!-- /cont -->
+</div><!-- /page -->
+
+<footer>
+  <p>Roborock S5 "Pepa" · Valetudo 2025.01.0 · Linux 3.4.39 ARMv7 · glibc 2.19 · 192.168.x.x</p>
+  <p>8 bytes in a 3.2MB binary. A 8.8KB C file with 4 iterations. 13 radio stations. 0 cloud.</p>
+  <p style="margin-top:14px;color:#101025">The map stays accurate. The music plays. Pepa is free.</p>
+</footer>
+
+<script>
+const obs = new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('vis');obs.unobserve(e.target);}});
+},{threshold:0.06});
+document.querySelectorAll('.fade').forEach(el=>obs.observe(el));
+</script>
+</body>
+</html>

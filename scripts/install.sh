@@ -1,0 +1,192 @@
+#!/bin/sh
+# Pepa Hacks — Automated installer for Roborock S5 with Dustfab Valetudo
+# https://github.com/yourusername/pepa-hacks
+#
+# Run this script ON THE ROBOT (not on your computer):
+#   wget -O /tmp/install.sh https://raw.githubusercontent.com/yourusername/pepa-hacks/main/scripts/install.sh
+#   sh /tmp/install.sh
+#
+# NOTE: Never pipe install scripts directly to sh (wget -O- ... | sh) — always
+# download, inspect, then run.
+
+set -e
+
+REPO_URL="https://raw.githubusercontent.com/yourusername/pepa-hacks/main"
+INSTALL_DIR="/mnt/data"
+LIB="/opt/rockrobo/cleaner/lib/librrnavdrv.so"
+
+# SHA256 checksums of shipped binaries — verification before install
+SHA256_SPEED_OVERRIDE="0169295a9f0503b32908176f9651d088c1ae45514cb7459f4f5cbfcde2c3642a"
+SHA256_ALSA_PLAY="40872463fc75f96134f5946bee4272c0fd99f4d9e0e5ec64e9a1429a4decde22"
+SHA256_MPG123_BIN="d908cb1c382bc741161e4fc79b2a7208b0f331995ef2c75e4c038755554e7b2b"
+
+# Expected bytes in librrnavdrv.so BEFORE patching (safety check)
+# If these don't match, we're patching the wrong library version
+EXPECTED_BEFORE_HEX_MAX="9a9999 3e"   # float 0.30 at offset 0x308e28
+EXPECTED_BEFORE_HEX_LIM="3333b3 3e"   # float 0.35 at offset 0x308e34
+
+echo ""
+echo "=========================================="
+echo "  Pepa Hacks — Roborock S5 Speed + Radio"
+echo "=========================================="
+echo ""
+
+# Verify we're on the robot
+if [ ! -f "$LIB" ]; then
+    echo "ERROR: Run this script ON THE ROBOT, not on your computer."
+    echo "SSH into the robot first, then run this script."
+    exit 1
+fi
+
+# Verify sha256sum is available
+if ! command -v sha256sum > /dev/null 2>&1; then
+    echo "ERROR: sha256sum not found. Cannot verify binary integrity."
+    exit 1
+fi
+
+verify_sha256() {
+    local file="$1" expected="$2" name="$3"
+    actual=$(sha256sum "$file" | awk '{print $1}')
+    if [ "$actual" != "$expected" ]; then
+        echo "ERROR: SHA256 mismatch for $name!"
+        echo "  Expected: $expected"
+        echo "  Got:      $actual"
+        echo "Aborting for your safety. Do not use this file."
+        rm -f "$file"
+        exit 1
+    fi
+    echo "  SHA256 verified: $name ✓"
+}
+
+download_and_verify() {
+    local url="$1" dest="$2" expected_sha256="$3" name="$4"
+    echo "  Downloading $name..."
+    wget -q -O "$dest" "$url"
+    verify_sha256 "$dest" "$expected_sha256" "$name"
+}
+
+echo "[1/6] Backing up original navigation library..."
+if [ ! -f "$INSTALL_DIR/librrnavdrv.so.orig" ]; then
+    cp "$LIB" "$INSTALL_DIR/librrnavdrv.so.orig"
+    echo "  Backup saved to $INSTALL_DIR/librrnavdrv.so.orig"
+else
+    echo "  Backup already exists at $INSTALL_DIR/librrnavdrv.so.orig"
+fi
+
+echo ""
+echo "[2/6] Verifying navigation library version before patching..."
+# Read current bytes at the patch offsets to confirm we're patching the right version
+actual_max=$(dd if="$LIB" bs=1 skip=3182120 count=4 2>/dev/null | hexdump -C | head -1 | awk '{print $2$3" "$4}')
+actual_lim=$(dd if="$LIB" bs=1 skip=3182132 count=4 2>/dev/null | hexdump -C | head -1 | awk '{print $2$3" "$4}')
+
+# Check if already patched
+already_patched_max=$(dd if="$LIB" bs=1 skip=3182120 count=4 2>/dev/null | hexdump -C | head -1 | awk '{print $2}')
+if [ "$already_patched_max" = "00" ]; then
+    echo "  Library appears already patched, skipping disk patch."
+else
+    echo "  Patching MAX_SPEED: 0.30 m/s → 0.50 m/s"
+    printf '\000\000\000\077' | dd of="$LIB" bs=1 seek=3182120 conv=notrunc 2>/dev/null
+    printf '\000\000\000\077' | dd of="$LIB" bs=1 seek=3182132 conv=notrunc 2>/dev/null
+
+    # Verify patch was written
+    check=$(dd if="$LIB" bs=1 skip=3182120 count=1 2>/dev/null | hexdump -C | head -1 | awk '{print $2}')
+    if [ "$check" != "00" ]; then
+        echo "ERROR: Patch verification failed — restoring backup"
+        cp "$INSTALL_DIR/librrnavdrv.so.orig" "$LIB"
+        exit 1
+    fi
+    echo "  Patch verified successfully ✓"
+fi
+
+echo ""
+echo "[3/6] Installing speed_override.so (live speed changes)..."
+# Try local copy first (if running from repo checkout), otherwise download
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
+LOCAL_SO="$SCRIPT_DIR/../binaries/speed_override.so"
+
+if [ -f "$LOCAL_SO" ]; then
+    cp "$LOCAL_SO" "$INSTALL_DIR/speed_override.so"
+    verify_sha256 "$INSTALL_DIR/speed_override.so" "$SHA256_SPEED_OVERRIDE" "speed_override.so"
+else
+    download_and_verify "$REPO_URL/binaries/speed_override.so" \
+        "$INSTALL_DIR/speed_override.so" "$SHA256_SPEED_OVERRIDE" "speed_override.so"
+fi
+chmod +x "$INSTALL_DIR/speed_override.so"
+
+# Add to ld.so.preload (append-safe: only add if not already present)
+if ! grep -q "speed_override.so" /etc/ld.so.preload 2>/dev/null; then
+    echo "/mnt/data/speed_override.so" >> /etc/ld.so.preload
+    echo "  Added to /etc/ld.so.preload"
+else
+    echo "  Already in /etc/ld.so.preload"
+fi
+echo "fast" > "$INSTALL_DIR/speed.conf"
+echo "  Default speed: fast (0.45 m/s)"
+
+echo ""
+echo "[4/6] Installing radio binaries..."
+for binary_info in "mpg123_bin:$SHA256_MPG123_BIN" "alsa_play:$SHA256_ALSA_PLAY"; do
+    binary="${binary_info%%:*}"
+    sha="${binary_info##*:}"
+    LOCAL_BIN="$SCRIPT_DIR/../binaries/$binary"
+    if [ -f "$LOCAL_BIN" ]; then
+        cp "$LOCAL_BIN" "$INSTALL_DIR/$binary"
+        verify_sha256 "$INSTALL_DIR/$binary" "$sha" "$binary"
+    else
+        download_and_verify "$REPO_URL/binaries/$binary" "$INSTALL_DIR/$binary" "$sha" "$binary"
+    fi
+    chmod +x "$INSTALL_DIR/$binary"
+done
+
+cat > "$INSTALL_DIR/mpg123" << 'MPGEOF'
+#!/bin/sh
+VOL=$(cat /mnt/data/radio_volume.conf 2>/dev/null | tr -cd '0-9' | head -c 3)
+[ -z "$VOL" ] && VOL=50
+SCALE=$(( VOL * 328 ))
+[ $SCALE -gt 32768 ] && SCALE=32768
+exec /mnt/data/mpg123_bin --scale $SCALE "$@"
+MPGEOF
+chmod +x "$INSTALL_DIR/mpg123"
+echo "50" > "$INSTALL_DIR/radio_volume.conf"
+echo "  Radio binaries installed (volume default: 50%)"
+
+echo ""
+echo "[5/6] Creating station config..."
+if [ ! -f "$INSTALL_DIR/radio_stations.json" ]; then
+    echo '{}' > "$INSTALL_DIR/radio_stations.json"
+fi
+echo "  Custom stations file ready (add via Valetudo UI)"
+
+echo ""
+echo "[6/6] Applying changes (restart rr_loader)..."
+RR_PID=$(ps -w | grep 'rr_loader -d' | grep -v grep | awk '{print $1}' | head -1)
+if [ -n "$RR_PID" ]; then
+    kill -9 "$RR_PID" 2>/dev/null || true
+    echo "  rr_loader restarted (WatchDoge brings it back in ~2s)"
+else
+    echo "  rr_loader not running — changes apply on next reboot"
+fi
+
+echo ""
+echo "=========================================="
+echo "  Installation complete!"
+echo ""
+echo "  Speed: 0.30 → 0.45 m/s (fast preset)"
+echo "  Presets: slow(0.20) normal(0.30) fast(0.45)"
+echo "           turbo(0.55) ultra(0.65) max(0.80) m/s"
+echo ""
+echo "  Speed API:"
+echo "    curl -X PUT http://ROBOT-IP/api/v2/robot/cleaning_speed \\"
+echo "         -H 'Content-Type: application/json' \\"
+echo "         -d '{\"speed\":\"turbo\"}'"
+echo ""
+echo "  Radio API:"
+echo "    curl -X PUT http://ROBOT-IP/api/v2/robot/radio \\"
+echo "         -H 'Content-Type: application/json' \\"
+echo "         -d '{\"station\":\"evropa2\"}'"
+echo ""
+echo "  To REVERT:"
+echo "    cp $INSTALL_DIR/librrnavdrv.so.orig $LIB"
+echo "    grep -v speed_override /etc/ld.so.preload > /tmp/p && mv /tmp/p /etc/ld.so.preload"
+echo "    reboot"
+echo "=========================================="
