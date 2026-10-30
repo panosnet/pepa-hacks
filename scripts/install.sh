@@ -1,9 +1,9 @@
 #!/bin/sh
 # Pepa Hacks — Automated installer for Roborock S5 with Dustfab Valetudo
-# https://github.com/yourusername/pepa-hacks
+# https://github.com/panosnet/pepa-hacks
 #
 # Run this script ON THE ROBOT (not on your computer):
-#   wget -O /tmp/install.sh https://raw.githubusercontent.com/yourusername/pepa-hacks/main/scripts/install.sh
+#   wget -O /tmp/install.sh https://raw.githubusercontent.com/panosnet/pepa-hacks/main/scripts/install.sh
 #   sh /tmp/install.sh
 #
 # NOTE: Never pipe install scripts directly to sh (wget -O- ... | sh) — always
@@ -11,7 +11,7 @@
 
 set -e
 
-REPO_URL="https://raw.githubusercontent.com/yourusername/pepa-hacks/main"
+REPO_URL="https://raw.githubusercontent.com/panosnet/pepa-hacks/main"
 INSTALL_DIR="/mnt/data"
 LIB="/opt/rockrobo/cleaner/lib/librrnavdrv.so"
 

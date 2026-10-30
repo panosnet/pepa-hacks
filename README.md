@@ -77,7 +77,7 @@ ssh -i ~/path/to/your-dustfab-key.key root@YOUR-ROBOT-IP
 
 # 2. Download the installer (always inspect before running)
 wget -O /tmp/install.sh \
-  https://raw.githubusercontent.com/yourusername/pepa-hacks/main/scripts/install.sh
+  https://raw.githubusercontent.com/panosnet/pepa-hacks/main/scripts/install.sh
 
 # 3. Review it
 cat /tmp/install.sh
@@ -107,7 +107,7 @@ ssh -i ~/path/to/your-dustfab-key.key root@YOUR-ROBOT-IP
 
 # Download patched Valetudo from releases
 wget -O /mnt/data/valetudo-new \
-  https://github.com/yourusername/pepa-hacks/releases/download/latest/valetudo-armv7
+  https://github.com/panosnet/pepa-hacks/releases/download/latest/valetudo-armv7
 
 # Verify checksum (find hash in the release notes)
 sha256sum /mnt/data/valetudo-new
