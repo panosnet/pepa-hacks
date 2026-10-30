@@ -76,26 +76,30 @@ fi
 echo ""
 echo "[2/6] Verifying navigation library version before patching..."
 # Read current bytes at the patch offsets to confirm we're patching the right version
-actual_max=$(dd if="$LIB" bs=1 skip=3182120 count=4 2>/dev/null | hexdump -C | head -1 | awk '{print $2$3" "$4}')
-actual_lim=$(dd if="$LIB" bs=1 skip=3182132 count=4 2>/dev/null | hexdump -C | head -1 | awk '{print $2$3" "$4}')
+# Read current bytes at patch offsets using od for reliable hex output
+actual_max=$(dd if="$LIB" bs=1 skip=3182120 count=4 2>/dev/null | od -An -tx1 | tr -d " \n")
+actual_lim=$(dd if="$LIB" bs=1 skip=3182132 count=4 2>/dev/null | od -An -tx1 | tr -d " \n")
 
-# Check if already patched
-already_patched_max=$(dd if="$LIB" bs=1 skip=3182120 count=4 2>/dev/null | hexdump -C | head -1 | awk '{print $2}')
-if [ "$already_patched_max" = "00" ]; then
-    echo "  Library appears already patched, skipping disk patch."
-else
+if [ "$actual_max" = "9a99993e" ] && [ "$actual_lim" = "3333b33e" ]; then
+    # Unpatched factory library — safe to patch
     echo "  Patching MAX_SPEED: 0.30 m/s → 0.50 m/s"
-    printf '\000\000\000\077' | dd of="$LIB" bs=1 seek=3182120 conv=notrunc 2>/dev/null
-    printf '\000\000\000\077' | dd of="$LIB" bs=1 seek=3182132 conv=notrunc 2>/dev/null
-
-    # Verify patch was written
-    check=$(dd if="$LIB" bs=1 skip=3182120 count=1 2>/dev/null | hexdump -C | head -1 | awk '{print $2}')
-    if [ "$check" != "00" ]; then
+    printf "\000\000\000\077" | dd of="$LIB" bs=1 seek=3182120 conv=notrunc 2>/dev/null
+    printf "\000\000\000\077" | dd of="$LIB" bs=1 seek=3182132 conv=notrunc 2>/dev/null
+    # Verify the write landed
+    verify=$(dd if="$LIB" bs=1 skip=3182120 count=4 2>/dev/null | od -An -tx1 | tr -d " \n")
+    if [ "$verify" != "0000003f" ]; then
         echo "ERROR: Patch verification failed — restoring backup"
         cp "$INSTALL_DIR/librrnavdrv.so.orig" "$LIB"
         exit 1
     fi
-    echo "  Patch verified successfully ✓"
+    echo "  Patch verified ✓"
+elif [ "$actual_max" = "0000003f" ]; then
+    echo "  Library already patched, skipping."
+else
+    echo "ERROR: Unexpected bytes at patch offsets (max=$actual_max lim=$actual_lim)"
+    echo "  This may be a different librrnavdrv.so version. Aborting to be safe."
+    echo "  Your robot is unchanged — no harm done."
+    exit 1
 fi
 
 echo ""
@@ -140,11 +144,13 @@ done
 
 cat > "$INSTALL_DIR/mpg123" << 'MPGEOF'
 #!/bin/sh
-VOL=$(cat /mnt/data/radio_volume.conf 2>/dev/null | tr -cd '0-9' | head -c 3)
-[ -z "$VOL" ] && VOL=50
+VOL=$(tr -cd '0-9' < /mnt/data/radio_volume.conf 2>/dev/null | head -c 3)
+VOL=$(printf '%s' "$VOL" | sed 's/^0*//')
+case "$VOL" in ''|*[!0-9]*) VOL=50 ;; esac
+[ "$VOL" -gt 100 ] 2>/dev/null && VOL=100
 SCALE=$(( VOL * 328 ))
-[ $SCALE -gt 32768 ] && SCALE=32768
-exec /mnt/data/mpg123_bin --scale $SCALE "$@"
+[ "$SCALE" -gt 32768 ] && SCALE=32768
+exec /mnt/data/mpg123_bin --scale "$SCALE" "$@"
 MPGEOF
 chmod +x "$INSTALL_DIR/mpg123"
 echo "50" > "$INSTALL_DIR/radio_volume.conf"
