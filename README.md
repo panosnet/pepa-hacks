@@ -337,3 +337,51 @@ Not affiliated with Roborock, Valetudo, or Dustfab.
 - [Valetudo](https://valetudo.cloud) — open-source robot vacuum firmware
 - [Dustfab](https://fab.valetudo.cloud) — Valetudo builds with SSH
 - [Radio Browser](https://www.radio-browser.info) — community radio stream database
+
+---
+
+## 🌙 Night Mode (LED Toggle)
+
+Turn off the robot's status LED for silent night cleaning.
+
+### Via web UI
+Open `http://YOUR-ROBOT-IP` → **Night Mode** toggle below Radio.
+
+### Via API
+
+```bash
+ROBOT=http://YOUR-ROBOT-IP
+
+# Turn LED off (night mode)
+curl -X PUT $ROBOT/api/v2/robot/hacks/led \
+  -H 'Content-Type: application/json' \
+  -d '{"value": 0}'
+
+# Turn LED back on
+curl -X PUT $ROBOT/api/v2/robot/hacks/led \
+  -H 'Content-Type: application/json' \
+  -d '{"value": 1}'
+
+# Get current LED state
+curl $ROBOT/api/v2/robot/hacks/led
+```
+
+---
+
+## ⚡ Rotater Acceleration Tuning
+
+Adjust how fast the robot accelerates through turns. At high cleaning speeds, snappier turns improve coverage.
+
+```bash
+ROBOT=http://YOUR-ROBOT-IP
+
+# Get current values (default: 237/239 ms)
+curl $ROBOT/api/v2/robot/hacks/rotater
+
+# Set faster turns (lower = snappier)
+curl -X PUT $ROBOT/api/v2/robot/hacks/rotater \
+  -H 'Content-Type: application/json' \
+  -d '{"acc_low": 150, "acc_high": 160}'
+```
+
+Range: 50–500 ms. Default factory values: `acc_low=237, acc_high=239`.
