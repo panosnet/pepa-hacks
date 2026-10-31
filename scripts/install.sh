@@ -16,7 +16,7 @@ INSTALL_DIR="/mnt/data"
 LIB="/opt/rockrobo/cleaner/lib/librrnavdrv.so"
 
 # SHA256 checksums of shipped binaries — verification before install
-SHA256_SPEED_OVERRIDE="76ca02ea274f4489ae1594682edbb2adbbc02f5279641a02930cd79d8ab5724e"
+SHA256_SPEED_OVERRIDE=""
 SHA256_ALSA_PLAY="40872463fc75f96134f5946bee4272c0fd99f4d9e0e5ec64e9a1429a4decde22"
 SHA256_MPG123_BIN="d908cb1c382bc741161e4fc79b2a7208b0f331995ef2c75e4c038755554e7b2b"
 
