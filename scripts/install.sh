@@ -115,9 +115,9 @@ verify_sha256() {
     echo "  SHA256 verified: $name ✓"
 }
 
-# Non-destructive variant used for post-install checks on already-placed files.
-# Does NOT rm on mismatch so a dangling preload entry is never created.
-# Rollback trap handles cleanup via _PRELOADED/_PATCHED flags.
+# Post-install sanity check (belt-and-suspenders for filesystem corruption).
+# Called BEFORE _PRELOADED is set, so rm -f on mismatch is always safe —
+# the preload entry does not yet reference the file.
 verify_installed_sha256() {
     local file="$1" expected="$2" name="$3"
     actual=$(sha256sum "$file" | awk '{print $1}')
@@ -125,7 +125,7 @@ verify_installed_sha256() {
         echo "ERROR: Post-install SHA256 mismatch for $name!" >&2
         echo "  Expected: $expected" >&2
         echo "  Got:      $actual" >&2
-        echo "  Rollback will restore safe state." >&2
+        rm -f "$file"
         exit 1
     fi
     echo "  Post-install SHA256 verified: $name ✓"
@@ -196,21 +196,21 @@ fi
 
 echo ""
 echo "[3/6] Installing speed_override.so (live speed changes)..."
-cp "$STAGING_DIR/speed_override.so" "$INSTALL_DIR/speed_override.so"
-# Non-destructive check — does NOT rm on mismatch (rollback trap handles cleanup)
+# mv (atomic) from already-SHA256-verified staging — _PRELOADED is still 0 here,
+# so verify_installed_sha256 can safely rm on mismatch without a dangling preload.
+mv "$STAGING_DIR/speed_override.so" "$INSTALL_DIR/speed_override.so"
 verify_installed_sha256 "$INSTALL_DIR/speed_override.so" "$SHA256_SPEED_OVERRIDE" "speed_override.so"
 chmod 755 "$INSTALL_DIR/speed_override.so"
 echo "  speed_override.so installed and verified"
 
-# Add to ld.so.preload (append-safe: only add if not already present)
+# Add to ld.so.preload — _PRELOADED=1 set AFTER the .so is verified and in place
 if ! grep -q "speed_override.so" /etc/ld.so.preload 2>/dev/null; then
     echo "/mnt/data/speed_override.so" >> /etc/ld.so.preload
-    _PRELOADED=1  # arm rollback for preload entry
     echo "  Added to /etc/ld.so.preload"
 else
-    _PRELOADED=1  # entry already present — rollback should still clean it up if we fail
     echo "  Already in /etc/ld.so.preload"
 fi
+_PRELOADED=1  # arm rollback — preload now references the verified .so
 echo "fast" > "$INSTALL_DIR/speed.conf"
 echo "  Default speed: fast (0.45 m/s)"
 
@@ -218,7 +218,7 @@ echo ""
 echo "[4/6] Installing radio binaries..."
 for binary_info in "mpg123_bin:$SHA256_MPG123_BIN" "alsa_play:$SHA256_ALSA_PLAY"; do
     binary="${binary_info%%:*}"; sha="${binary_info##*:}"
-    cp "$STAGING_DIR/$binary" "$INSTALL_DIR/$binary"
+    mv "$STAGING_DIR/$binary" "$INSTALL_DIR/$binary"
     verify_installed_sha256 "$INSTALL_DIR/$binary" "$sha" "$binary"
     chmod 755 "$INSTALL_DIR/$binary"
     echo "  $binary installed and verified"
