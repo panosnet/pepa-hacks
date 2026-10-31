@@ -14,6 +14,7 @@ set -e
 REPO_URL="https://raw.githubusercontent.com/panosnet/pepa-hacks/main"
 INSTALL_DIR="/mnt/data"
 LIB="/opt/rockrobo/cleaner/lib/librrnavdrv.so"
+STAGING_DIR="/tmp/pepa_hacks_staging"
 
 # SHA256 checksums of shipped binaries — verification before install
 SHA256_SPEED_OVERRIDE="76ca02ea274f4489ae1594682edbb2adbbc02f5279641a02930cd79d8ab5724e"
@@ -24,6 +25,26 @@ SHA256_MPG123_BIN="d908cb1c382bc741161e4fc79b2a7208b0f331995ef2c75e4c038755554e7
 # If these don't match, we're patching the wrong library version
 EXPECTED_BEFORE_HEX_MAX="9a9999 3e"   # float 0.30 at offset 0x308e28
 EXPECTED_BEFORE_HEX_LIM="3333b3 3e"   # float 0.35 at offset 0x308e34
+
+# Rollback: restore library and ld.so.preload entry if we fail after patching
+_PATCHED=0
+rollback() {
+    if [ "$_PATCHED" = "1" ]; then
+        echo ""
+        echo "!!! Installation failed — rolling back library patch !!!"
+        if [ -f "$INSTALL_DIR/librrnavdrv.so.orig" ]; then
+            cp "$INSTALL_DIR/librrnavdrv.so.orig" "$LIB" && echo "  Library restored."
+        fi
+        if grep -q "speed_override.so" /etc/ld.so.preload 2>/dev/null; then
+            grep -v "speed_override.so" /etc/ld.so.preload > /tmp/preload_tmp \
+                && mv /tmp/preload_tmp /etc/ld.so.preload
+            echo "  Removed from /etc/ld.so.preload."
+        fi
+        rm -f "$INSTALL_DIR/speed_override.so"
+    fi
+    rm -rf "$STAGING_DIR"
+}
+trap rollback EXIT
 
 echo ""
 echo "=========================================="
@@ -65,6 +86,24 @@ download_and_verify() {
     verify_sha256 "$dest" "$expected_sha256" "$name"
 }
 
+echo "[0/6] Pre-downloading and verifying all binaries (before any system change)..."
+mkdir -p "$STAGING_DIR"
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
+
+for item in "speed_override.so:$SHA256_SPEED_OVERRIDE" "mpg123_bin:$SHA256_MPG123_BIN" "alsa_play:$SHA256_ALSA_PLAY"; do
+    binary="${item%%:*}"; sha="${item##*:}"
+    LOCAL_BIN="$SCRIPT_DIR/../binaries/$binary"
+    if [ -f "$LOCAL_BIN" ]; then
+        cp "$LOCAL_BIN" "$STAGING_DIR/$binary"
+    else
+        echo "  Downloading $binary..."
+        wget -q -O "$STAGING_DIR/$binary" "$REPO_URL/binaries/$binary"
+    fi
+    verify_sha256 "$STAGING_DIR/$binary" "$sha" "$binary"
+done
+echo "  All binaries verified — proceeding with install."
+echo ""
+
 echo "[1/6] Backing up original navigation library..."
 if [ ! -f "$INSTALL_DIR/librrnavdrv.so.orig" ]; then
     cp "$LIB" "$INSTALL_DIR/librrnavdrv.so.orig"
@@ -92,6 +131,7 @@ if [ "$actual_max" = "9a99993e" ] && [ "$actual_lim" = "3333b33e" ]; then
         cp "$INSTALL_DIR/librrnavdrv.so.orig" "$LIB"
         exit 1
     fi
+    _PATCHED=1  # arm rollback — library is now modified
     echo "  Patch verified ✓"
 elif [ "$actual_max" = "0000003f" ]; then
     echo "  Library already patched, skipping."
@@ -104,18 +144,10 @@ fi
 
 echo ""
 echo "[3/6] Installing speed_override.so (live speed changes)..."
-# Try local copy first (if running from repo checkout), otherwise download
-SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)"
-LOCAL_SO="$SCRIPT_DIR/../binaries/speed_override.so"
-
-if [ -f "$LOCAL_SO" ]; then
-    cp "$LOCAL_SO" "$INSTALL_DIR/speed_override.so"
-    verify_sha256 "$INSTALL_DIR/speed_override.so" "$SHA256_SPEED_OVERRIDE" "speed_override.so"
-else
-    download_and_verify "$REPO_URL/binaries/speed_override.so" \
-        "$INSTALL_DIR/speed_override.so" "$SHA256_SPEED_OVERRIDE" "speed_override.so"
-fi
+# Use pre-verified staging copy (already checksummed in step 0)
+cp "$STAGING_DIR/speed_override.so" "$INSTALL_DIR/speed_override.so"
 chmod +x "$INSTALL_DIR/speed_override.so"
+echo "  speed_override.so installed (pre-verified)"
 
 # Add to ld.so.preload (append-safe: only add if not already present)
 if ! grep -q "speed_override.so" /etc/ld.so.preload 2>/dev/null; then
@@ -129,17 +161,11 @@ echo "  Default speed: fast (0.45 m/s)"
 
 echo ""
 echo "[4/6] Installing radio binaries..."
-for binary_info in "mpg123_bin:$SHA256_MPG123_BIN" "alsa_play:$SHA256_ALSA_PLAY"; do
-    binary="${binary_info%%:*}"
-    sha="${binary_info##*:}"
-    LOCAL_BIN="$SCRIPT_DIR/../binaries/$binary"
-    if [ -f "$LOCAL_BIN" ]; then
-        cp "$LOCAL_BIN" "$INSTALL_DIR/$binary"
-        verify_sha256 "$INSTALL_DIR/$binary" "$sha" "$binary"
-    else
-        download_and_verify "$REPO_URL/binaries/$binary" "$INSTALL_DIR/$binary" "$sha" "$binary"
-    fi
+# Use pre-verified staging copies (already checksummed in step 0)
+for binary in mpg123_bin alsa_play; do
+    cp "$STAGING_DIR/$binary" "$INSTALL_DIR/$binary"
     chmod +x "$INSTALL_DIR/$binary"
+    echo "  $binary installed (pre-verified)"
 done
 
 cat > "$INSTALL_DIR/mpg123" << 'MPGEOF'
@@ -164,6 +190,11 @@ fi
 echo "  Custom stations file ready (add via Valetudo UI)"
 
 echo ""
+echo "[5b/6] Cleaning up staging area..."
+rm -rf "$STAGING_DIR"
+_PATCHED=0  # disarm rollback — install succeeded
+trap - EXIT
+
 echo "[6/6] Applying changes (restart rr_loader)..."
 RR_PID=$(ps -w | grep 'rr_loader -d' | grep -v grep | awk '{print $1}' | head -1)
 if [ -n "$RR_PID" ]; then
