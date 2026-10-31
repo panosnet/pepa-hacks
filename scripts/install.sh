@@ -14,7 +14,7 @@ set -e
 REPO_URL="https://raw.githubusercontent.com/panosnet/pepa-hacks/main"
 INSTALL_DIR="/mnt/data"
 LIB="/opt/rockrobo/cleaner/lib/librrnavdrv.so"
-STAGING_DIR="/tmp/pepa_hacks_staging"
+STAGING_DIR=""  # set after robot check, via mktemp
 
 # SHA256 checksums of shipped binaries — verification before install
 SHA256_SPEED_OVERRIDE="76ca02ea274f4489ae1594682edbb2adbbc02f5279641a02930cd79d8ab5724e"
@@ -36,9 +36,12 @@ rollback() {
             cp "$INSTALL_DIR/librrnavdrv.so.orig" "$LIB" && echo "  Library restored."
         fi
         if grep -q "speed_override.so" /etc/ld.so.preload 2>/dev/null; then
-            grep -v "speed_override.so" /etc/ld.so.preload > /tmp/preload_tmp \
-                && mv /tmp/preload_tmp /etc/ld.so.preload
-            echo "  Removed from /etc/ld.so.preload."
+            _tmpf="$(mktemp /etc/.ld.so.preload.XXXXXX)" || true
+            if [ -n "$_tmpf" ]; then
+                grep -v "speed_override.so" /etc/ld.so.preload > "$_tmpf" \
+                    && chmod 644 "$_tmpf" && mv "$_tmpf" /etc/ld.so.preload
+                echo "  Removed from /etc/ld.so.preload."
+            fi
         fi
         rm -f "$INSTALL_DIR/speed_override.so"
     fi
@@ -58,6 +61,10 @@ if [ ! -f "$LIB" ]; then
     echo "SSH into the robot first, then run this script."
     exit 1
 fi
+
+# Create private staging dir — unpredictable name, root-only (mode 0700)
+STAGING_DIR="$(mktemp -d /tmp/pepa_hacks.XXXXXX)" || { echo "ERROR: mktemp failed"; exit 1; }
+chmod 700 "$STAGING_DIR"
 
 # Verify sha256sum is available
 if ! command -v sha256sum > /dev/null 2>&1; then
@@ -144,10 +151,10 @@ fi
 
 echo ""
 echo "[3/6] Installing speed_override.so (live speed changes)..."
-# Use pre-verified staging copy (already checksummed in step 0)
 cp "$STAGING_DIR/speed_override.so" "$INSTALL_DIR/speed_override.so"
-chmod +x "$INSTALL_DIR/speed_override.so"
-echo "  speed_override.so installed (pre-verified)"
+verify_sha256 "$INSTALL_DIR/speed_override.so" "$SHA256_SPEED_OVERRIDE" "speed_override.so (installed)"
+chmod 755 "$INSTALL_DIR/speed_override.so"
+echo "  speed_override.so installed and verified"
 
 # Add to ld.so.preload (append-safe: only add if not already present)
 if ! grep -q "speed_override.so" /etc/ld.so.preload 2>/dev/null; then
@@ -161,11 +168,12 @@ echo "  Default speed: fast (0.45 m/s)"
 
 echo ""
 echo "[4/6] Installing radio binaries..."
-# Use pre-verified staging copies (already checksummed in step 0)
-for binary in mpg123_bin alsa_play; do
+for binary_info in "mpg123_bin:$SHA256_MPG123_BIN" "alsa_play:$SHA256_ALSA_PLAY"; do
+    binary="${binary_info%%:*}"; sha="${binary_info##*:}"
     cp "$STAGING_DIR/$binary" "$INSTALL_DIR/$binary"
-    chmod +x "$INSTALL_DIR/$binary"
-    echo "  $binary installed (pre-verified)"
+    verify_sha256 "$INSTALL_DIR/$binary" "$sha" "$binary (installed)"
+    chmod 755 "$INSTALL_DIR/$binary"
+    echo "  $binary installed and verified"
 done
 
 cat > "$INSTALL_DIR/mpg123" << 'MPGEOF'
@@ -224,6 +232,7 @@ echo "         -d '{\"station\":\"evropa2\"}'"
 echo ""
 echo "  To REVERT:"
 echo "    cp $INSTALL_DIR/librrnavdrv.so.orig $LIB"
-echo "    grep -v speed_override /etc/ld.so.preload > /tmp/p && mv /tmp/p /etc/ld.so.preload"
+echo "    _p=\$(mktemp /etc/.ld.so.preload.XXXXXX)"
+echo "    grep -v speed_override /etc/ld.so.preload > \"\$_p\" && chmod 644 \"\$_p\" && mv \"\$_p\" /etc/ld.so.preload"
 echo "    reboot"
 echo "=========================================="
