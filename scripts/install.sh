@@ -116,8 +116,9 @@ verify_sha256() {
 }
 
 # Post-install sanity check (belt-and-suspenders for filesystem corruption).
-# Called BEFORE _PRELOADED is set, so rm -f on mismatch is always safe —
-# the preload entry does not yet reference the file.
+# Removes the file on mismatch ONLY when ld.so.preload does not yet reference
+# it — if it does, the rollback trap owns removal (preload entry first, then
+# the file) to prevent a dangling preload on reboot.
 verify_installed_sha256() {
     local file="$1" expected="$2" name="$3"
     actual=$(sha256sum "$file" | awk '{print $1}')
@@ -125,7 +126,9 @@ verify_installed_sha256() {
         echo "ERROR: Post-install SHA256 mismatch for $name!" >&2
         echo "  Expected: $expected" >&2
         echo "  Got:      $actual" >&2
-        rm -f "$file"
+        if ! grep -q 'speed_override\.so' /etc/ld.so.preload 2>/dev/null; then
+            rm -f "$file"
+        fi
         exit 1
     fi
     echo "  Post-install SHA256 verified: $name ✓"
@@ -196,21 +199,27 @@ fi
 
 echo ""
 echo "[3/6] Installing speed_override.so (live speed changes)..."
-# mv (atomic) from already-SHA256-verified staging — _PRELOADED is still 0 here,
-# so verify_installed_sha256 can safely rm on mismatch without a dangling preload.
+# Pre-arm _PRELOADED if the preload entry already exists (reinstall path).
+# This ensures rollback removes the entry before the file on any failure,
+# preventing a dangling preload → boot failure.
+if grep -q 'speed_override\.so' /etc/ld.so.preload 2>/dev/null; then
+    _PRELOADED=1
+fi
+# mv (atomic) from already-SHA256-verified staging.
+# verify_installed_sha256 only rm -f when _PRELOADED=0 (no preload reference yet).
 mv "$STAGING_DIR/speed_override.so" "$INSTALL_DIR/speed_override.so"
 verify_installed_sha256 "$INSTALL_DIR/speed_override.so" "$SHA256_SPEED_OVERRIDE" "speed_override.so"
 chmod 755 "$INSTALL_DIR/speed_override.so"
 echo "  speed_override.so installed and verified"
 
-# Add to ld.so.preload — _PRELOADED=1 set AFTER the .so is verified and in place
+# Add to ld.so.preload if not already present, then arm rollback.
 if ! grep -q "speed_override.so" /etc/ld.so.preload 2>/dev/null; then
     echo "/mnt/data/speed_override.so" >> /etc/ld.so.preload
     echo "  Added to /etc/ld.so.preload"
 else
     echo "  Already in /etc/ld.so.preload"
 fi
-_PRELOADED=1  # arm rollback — preload now references the verified .so
+_PRELOADED=1  # arm/confirm — preload entry and verified .so are both in place
 echo "fast" > "$INSTALL_DIR/speed.conf"
 echo "  Default speed: fast (0.45 m/s)"
 
