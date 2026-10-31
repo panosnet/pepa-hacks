@@ -26,44 +26,58 @@ SHA256_MPG123_BIN="d908cb1c382bc741161e4fc79b2a7208b0f331995ef2c75e4c038755554e7
 EXPECTED_BEFORE_HEX_MAX="9a9999 3e"   # float 0.30 at offset 0x308e28
 EXPECTED_BEFORE_HEX_LIM="3333b3 3e"   # float 0.35 at offset 0x308e34
 
-# Two rollback flags — tracked independently:
-#   _PATCHED=1   : librrnavdrv.so has been modified (needs library restore)
-#   _PRELOADED=1 : /etc/ld.so.preload entry has been added (needs removal)
+# Rollback flags and installed-binary tracking:
+#   _PATCHED=1       : librrnavdrv.so modified — needs library restore
+#   _PRELOADED=1     : /etc/ld.so.preload entry present — needs removal
+#   _INSTALLED_BINS  : space-separated list of radio binaries placed in INSTALL_DIR
 _PATCHED=0
 _PRELOADED=0
+_INSTALLED_BINS=""
+
+_remove_preload_entry() {
+    # Remove speed_override.so from /etc/ld.so.preload.
+    # Returns 0 on success, 1 on failure (caller decides how to handle the .so).
+    local _tmpf
+    _tmpf="$(mktemp /etc/.ld.so.preload.XXXXXX 2>/dev/null)" || {
+        echo "FATAL: cannot create temp file in /etc." >&2
+        echo "  /etc/ld.so.preload still references /mnt/data/speed_override.so." >&2
+        echo "  Remove that line manually BEFORE rebooting." >&2
+        return 1
+    }
+    if grep -v 'speed_override\.so' /etc/ld.so.preload > "$_tmpf" \
+       && chmod 644 "$_tmpf" && mv "$_tmpf" /etc/ld.so.preload; then
+        echo "  Removed from /etc/ld.so.preload."
+        return 0
+    else
+        rm -f "$_tmpf"
+        echo "FATAL: failed to rewrite /etc/ld.so.preload." >&2
+        return 1
+    fi
+}
 
 rollback() {
     local _rc=0
     echo ""
 
-    # Step 1: remove preload entry FIRST, then remove the .so.
-    # Fail-closed: if we cannot safely rewrite ld.so.preload, leave .so in
-    # place so the entry does not dangle. Print a manual-action message.
+    # Step 1: remove preload entry, then the .so. An unverified .so that can
+    # execute is worse than a missing preload reference (ld warns; it does not
+    # exec). Rollback always removes the entry FIRST, then the file.
     if [ "$_PRELOADED" = "1" ] && \
        grep -q 'speed_override\.so' /etc/ld.so.preload 2>/dev/null; then
         echo "!!! Rolling back /etc/ld.so.preload entry !!!"
-        _tmpf="$(mktemp /etc/.ld.so.preload.XXXXXX 2>/dev/null)" || {
-            echo "FATAL: cannot create temp file in /etc." >&2
-            echo "  /etc/ld.so.preload still references /mnt/data/speed_override.so." >&2
-            echo "  Remove that line manually BEFORE rebooting to avoid a boot failure." >&2
+        if _remove_preload_entry; then
+            rm -f "$INSTALL_DIR/speed_override.so"
+        else
             _rc=1
-        }
-        if [ -n "$_tmpf" ]; then
-            if grep -v 'speed_override\.so' /etc/ld.so.preload > "$_tmpf" \
-               && chmod 644 "$_tmpf" && mv "$_tmpf" /etc/ld.so.preload; then
-                echo "  Removed from /etc/ld.so.preload."
-                rm -f "$INSTALL_DIR/speed_override.so"
-            else
-                rm -f "$_tmpf"
-                echo "FATAL: failed to rewrite /etc/ld.so.preload." >&2
-                echo "  Leaving speed_override.so in place to avoid a dangling preload entry." >&2
-                echo "  Fix manually BEFORE rebooting." >&2
-                _rc=1
-            fi
         fi
     fi
 
-    # Step 2: restore the navigation library if we patched it.
+    # Step 2: clean up any radio binaries that were placed before a failure.
+    for _b in $_INSTALLED_BINS; do
+        rm -f "$_b"
+    done
+
+    # Step 3: restore the navigation library if we patched it.
     if [ "$_PATCHED" = "1" ]; then
         echo "!!! Rolling back library patch !!!"
         if [ -f "$INSTALL_DIR/librrnavdrv.so.orig" ]; then
@@ -116,17 +130,29 @@ verify_sha256() {
 }
 
 # Post-install sanity check (belt-and-suspenders for filesystem corruption).
-# Removes the file on mismatch ONLY when ld.so.preload does not yet reference
-# it — if it does, the rollback trap owns removal (preload entry first, then
-# the file) to prevent a dangling preload on reboot.
+# Pass "defer" as $4 ONLY for speed_override.so when a preload entry already
+# references it. In that case, inline removal of the preload entry happens
+# first (an unverified .so executing is worse than a missing preload reference),
+# with zero-truncation as last resort. All other files: always rm -f.
 verify_installed_sha256() {
-    local file="$1" expected="$2" name="$3"
+    local file="$1" expected="$2" name="$3" defer="${4:-}"
     actual=$(sha256sum "$file" | awk '{print $1}')
     if [ "$actual" != "$expected" ]; then
         echo "ERROR: Post-install SHA256 mismatch for $name!" >&2
         echo "  Expected: $expected" >&2
         echo "  Got:      $actual" >&2
-        if ! grep -q 'speed_override\.so' /etc/ld.so.preload 2>/dev/null; then
+        if [ "$defer" = "defer" ]; then
+            # Remove preload entry first so no unverified code can be loaded.
+            if _remove_preload_entry; then
+                _PRELOADED=0  # rollback trap no longer needs to handle it
+                rm -f "$file"
+            else
+                # Preload rewrite failed — zero-truncate so the entry references
+                # an empty file rather than potentially attacker-controlled code.
+                : > "$file"
+                echo "WARNING: zeroed $file to prevent execution of unverified code." >&2
+            fi
+        else
             rm -f "$file"
         fi
         exit 1
@@ -199,16 +225,17 @@ fi
 
 echo ""
 echo "[3/6] Installing speed_override.so (live speed changes)..."
-# Pre-arm _PRELOADED if the preload entry already exists (reinstall path).
-# This ensures rollback removes the entry before the file on any failure,
-# preventing a dangling preload → boot failure.
+# Pre-arm _PRELOADED if a preload entry already exists (reinstall path) so
+# the rollback trap handles it if anything goes wrong after the mv.
+_SO_DEFER=""
 if grep -q 'speed_override\.so' /etc/ld.so.preload 2>/dev/null; then
     _PRELOADED=1
+    _SO_DEFER="defer"  # existing entry references the .so — use inline removal on mismatch
 fi
 # mv (atomic) from already-SHA256-verified staging.
-# verify_installed_sha256 only rm -f when _PRELOADED=0 (no preload reference yet).
 mv "$STAGING_DIR/speed_override.so" "$INSTALL_DIR/speed_override.so"
-verify_installed_sha256 "$INSTALL_DIR/speed_override.so" "$SHA256_SPEED_OVERRIDE" "speed_override.so"
+verify_installed_sha256 "$INSTALL_DIR/speed_override.so" "$SHA256_SPEED_OVERRIDE" \
+    "speed_override.so" "$_SO_DEFER"
 chmod 755 "$INSTALL_DIR/speed_override.so"
 echo "  speed_override.so installed and verified"
 
@@ -228,8 +255,10 @@ echo "[4/6] Installing radio binaries..."
 for binary_info in "mpg123_bin:$SHA256_MPG123_BIN" "alsa_play:$SHA256_ALSA_PLAY"; do
     binary="${binary_info%%:*}"; sha="${binary_info##*:}"
     mv "$STAGING_DIR/$binary" "$INSTALL_DIR/$binary"
+    # No "defer" — radio binaries are never in ld.so.preload; always rm on mismatch.
     verify_installed_sha256 "$INSTALL_DIR/$binary" "$sha" "$binary"
     chmod 755 "$INSTALL_DIR/$binary"
+    _INSTALLED_BINS="$_INSTALLED_BINS $INSTALL_DIR/$binary"  # track for rollback
     echo "  $binary installed and verified"
 done
 
@@ -257,8 +286,9 @@ echo "  Custom stations file ready (add via Valetudo UI)"
 echo ""
 echo "[5b/6] Cleaning up staging area..."
 rm -rf "$STAGING_DIR"
-_PATCHED=0    # disarm — install succeeded
+_PATCHED=0         # disarm — install succeeded
 _PRELOADED=0
+_INSTALLED_BINS="" # disarm radio binary rollback
 trap - EXIT
 
 echo "[6/6] Applying changes (restart rr_loader)..."
